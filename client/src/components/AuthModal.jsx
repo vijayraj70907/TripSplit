@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Mail, Lock, User, KeyRound } from 'lucide-react';
+import { X, Mail, Lock, User, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 export default function AuthModal() {
   const { isAuthModalOpen, setIsAuthModalOpen, login, showToast } = useApp();
@@ -12,7 +12,8 @@ export default function AuthModal() {
     newPassword: ''
   });
   const [loading, setLoading] = useState(false);
-
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   if (!isAuthModalOpen) return null;
 
   const handleChange = (e) => {
@@ -126,15 +127,22 @@ export default function AuthModal() {
               <div style={{ position: 'relative' }}>
                 <Lock size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   name="password"
                   required
                   placeholder="••••••••"
                   className="form-input"
-                  style={{ paddingLeft: 40 }}
+                  style={{ paddingLeft: 40, paddingRight: 40 }}
                   value={formData.password}
                   onChange={handleChange}
                 />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
           )}
@@ -145,15 +153,22 @@ export default function AuthModal() {
               <div style={{ position: 'relative' }}>
                 <KeyRound size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
                 <input
-                  type="password"
+                  type={showNewPassword ? 'text' : 'password'}
                   name="newPassword"
                   required
                   placeholder="Enter new password"
                   className="form-input"
-                  style={{ paddingLeft: 40 }}
+                  style={{ paddingLeft: 40, paddingRight: 40 }}
                   value={formData.newPassword}
                   onChange={handleChange}
                 />
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                >
+                  {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
           )}
