@@ -10,7 +10,8 @@ export default function MobileNav() {
     { id: 'expenses', label: 'Expenses', icon: Receipt },
     { id: 'members', label: 'Members', icon: Users },
     { id: 'settlements', label: 'Settlement', icon: ArrowLeftRight },
-    { id: 'reports', label: 'Reports', icon: BarChart3 }
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   return (
