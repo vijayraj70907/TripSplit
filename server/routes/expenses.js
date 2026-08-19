@@ -6,16 +6,21 @@ const { verifyToken, verifyTripMember } = require('../middleware/auth');
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../uploads/'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'receipt-' + uniqueSuffix + path.extname(file.originalname));
+// Use memory storage instead of disk — works on ephemeral filesystems (Render, Railway, etc.)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp/;
+    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mime = allowed.test(file.mimetype);
+    if (ext && mime) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files (jpeg, jpg, png, gif, webp) are allowed'));
+    }
   }
 });
-const upload = multer({ storage });
 
 function broadcastTripUpdate(req, tripId, event, data) {
   const io = req.app.get('io');
@@ -243,13 +248,16 @@ router.post('/:expenseId/comments', verifyToken, verifyTripMember, (req, res) =>
   res.status(201).json({ message: 'Comment added', commentId: stmt.lastInsertRowid });
 });
 
-// 7. Upload receipt
+// 7. Upload receipt (returns Base64 data URL — works on ephemeral filesystems)
 router.post('/upload-receipt', verifyToken, upload.single('receipt'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No image file uploaded' });
   }
-  const fileUrl = `/uploads/${req.file.filename}`;
-  res.json({ receiptUrl: fileUrl });
+  // Convert buffer to Base64 data URL
+  const base64 = req.file.buffer.toString('base64');
+  const mimeType = req.file.mimetype;
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+  res.json({ receiptUrl: dataUrl });
 });
 
 module.exports = router;
