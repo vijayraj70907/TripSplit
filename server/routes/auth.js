@@ -8,10 +8,10 @@ const router = express.Router();
 
 // Register / Sign Up
 router.post('/register', (req, res) => {
-  const { name, email, password, avatar_url } = req.body;
+  const { name, email, password, avatar_url, securityQuestion, securityAnswer } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Name, email, and password are required' });
+  if (!name || !email || !password || !securityQuestion || !securityAnswer) {
+    return res.status(400).json({ error: 'Name, email, password, and security question/answer are required' });
   }
 
   if (password.length < 6) {
@@ -26,9 +26,12 @@ router.post('/register', (req, res) => {
   const salt = bcrypt.genSaltSync(10);
   const password_hash = bcrypt.hashSync(password, salt);
   const avatar = avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
+  
+  // Hash the lowercased security answer for secure storage
+  const hashedSecurityAnswer = bcrypt.hashSync(securityAnswer.trim().toLowerCase(), salt);
 
-  const stmt = db.prepare('INSERT INTO users (name, email, password_hash, avatar_url) VALUES (?, ?, ?, ?)');
-  const info = stmt.run(name, email.toLowerCase(), password_hash, avatar);
+  const stmt = db.prepare('INSERT INTO users (name, email, password_hash, avatar_url, security_question, security_answer) VALUES (?, ?, ?, ?, ?, ?)');
+  const info = stmt.run(name, email.toLowerCase(), password_hash, avatar, securityQuestion, hashedSecurityAnswer);
 
   const token = jwt.sign({ id: info.lastInsertRowid, email: email.toLowerCase(), name }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -64,16 +67,37 @@ router.post('/login', (req, res) => {
   });
 });
 
-// Forgot Password (mock verification)
-router.post('/forgot-password', (req, res) => {
-  const { email, newPassword } = req.body;
-  if (!email || !newPassword) {
-    return res.status(400).json({ error: 'Email and new password are required' });
+// Get Security Question for Forgot Password
+router.get('/security-question', (req, res) => {
+  const { email } = req.query;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
   }
 
-  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+  const user = db.prepare('SELECT security_question FROM users WHERE email = ?').get(email.toLowerCase());
+  if (!user || !user.security_question) {
+    return res.status(404).json({ error: 'User not found or no security question set for this account.' });
+  }
+
+  res.json({ securityQuestion: user.security_question });
+});
+
+// Forgot Password (Security Question Verification)
+router.post('/forgot-password', (req, res) => {
+  const { email, securityAnswer, newPassword } = req.body;
+  if (!email || !securityAnswer || !newPassword) {
+    return res.status(400).json({ error: 'Email, security answer, and new password are required' });
+  }
+
+  const user = db.prepare('SELECT id, security_answer FROM users WHERE email = ?').get(email.toLowerCase());
   if (!user) {
     return res.status(404).json({ error: 'User with this email was not found' });
+  }
+
+  // Verify the security answer
+  const isMatch = user.security_answer && bcrypt.compareSync(securityAnswer.trim().toLowerCase(), user.security_answer);
+  if (!isMatch) {
+    return res.status(401).json({ error: 'Incorrect security answer.' });
   }
 
   if (newPassword.length < 6) {

@@ -9,8 +9,12 @@ export default function AuthModal() {
     name: '',
     email: '',
     password: '',
-    newPassword: ''
+    newPassword: '',
+    securityQuestionSelect: 'What was the name of your first pet?',
+    customSecurityQuestion: '',
+    securityAnswer: ''
   });
+  const [fetchedSecurityQuestion, setFetchedSecurityQuestion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -18,6 +22,27 @@ export default function AuthModal() {
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleFetchQuestion = async () => {
+    if (!formData.email) {
+      showToast('Please enter your email first', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/auth/security-question?email=${encodeURIComponent(formData.email)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setFetchedSecurityQuestion(data.securityQuestion);
+      } else {
+        showToast(data.error || 'User not found', 'error');
+      }
+    } catch (err) {
+      showToast('Network error, please try again', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -38,10 +63,26 @@ export default function AuthModal() {
           showToast(data.error || 'Login failed', 'error');
         }
       } else if (tab === 'register') {
+        const finalQuestion = formData.securityQuestionSelect === 'Other (Custom Question)' 
+          ? formData.customSecurityQuestion 
+          : formData.securityQuestionSelect;
+          
+        if (!finalQuestion || !formData.securityAnswer) {
+          showToast('Security question and answer are required', 'error');
+          setLoading(false);
+          return;
+        }
+
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password })
+          body: JSON.stringify({ 
+            name: formData.name, 
+            email: formData.email, 
+            password: formData.password,
+            securityQuestion: finalQuestion,
+            securityAnswer: formData.securityAnswer
+          })
         });
         const data = await res.json();
         if (res.ok) {
@@ -50,15 +91,26 @@ export default function AuthModal() {
           showToast(data.error || 'Sign up failed', 'error');
         }
       } else if (tab === 'forgot') {
+        if (!fetchedSecurityQuestion) {
+          // If question isn't fetched yet, fetch it instead of submitting form
+          await handleFetchQuestion();
+          return;
+        }
+
         const res = await fetch('/api/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email, newPassword: formData.newPassword })
+          body: JSON.stringify({ 
+            email: formData.email, 
+            securityAnswer: formData.securityAnswer,
+            newPassword: formData.newPassword 
+          })
         });
         const data = await res.json();
         if (res.ok) {
           showToast(data.message, 'success');
           setTab('login');
+          setFetchedSecurityQuestion(null);
         } else {
           showToast(data.error || 'Password reset failed', 'error');
         }
@@ -112,6 +164,7 @@ export default function AuthModal() {
                 type="email"
                 name="email"
                 required
+                disabled={tab === 'forgot' && fetchedSecurityQuestion}
                 placeholder="Enter your email"
                 className="form-input"
                 style={{ paddingLeft: 40 }}
@@ -122,55 +175,122 @@ export default function AuthModal() {
           </div>
 
           {tab !== 'forgot' && (
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  required
-                  placeholder="••••••••"
-                  className="form-input"
-                  style={{ paddingLeft: 40, paddingRight: 40 }}
-                  value={formData.password}
-                  onChange={handleChange}
-                />
-                <button 
-                  type="button" 
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+            <>
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    required
+                    placeholder="••••••••"
+                    className="form-input"
+                    style={{ paddingLeft: 40, paddingRight: 40 }}
+                    value={formData.password}
+                    onChange={handleChange}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
-            </div>
+
+              {tab === 'register' && (
+                <div style={{ marginTop: 24, padding: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ fontSize: '0.95rem', marginBottom: 12, color: 'var(--text-primary)' }}>Account Recovery</h4>
+                  
+                  <div className="form-group">
+                    <label className="form-label">Security Question</label>
+                    <select
+                      name="securityQuestionSelect"
+                      className="form-select"
+                      value={formData.securityQuestionSelect}
+                      onChange={handleChange}
+                    >
+                      <option>What was the name of your first pet?</option>
+                      <option>In what city were you born?</option>
+                      <option>What is your mother's maiden name?</option>
+                      <option>Other (Custom Question)</option>
+                    </select>
+                  </div>
+
+                  {formData.securityQuestionSelect === 'Other (Custom Question)' && (
+                    <div className="form-group">
+                      <label className="form-label">Custom Question</label>
+                      <input
+                        type="text"
+                        name="customSecurityQuestion"
+                        required
+                        placeholder="e.g. What is my favorite movie?"
+                        className="form-input"
+                        value={formData.customSecurityQuestion}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  )}
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Answer</label>
+                    <input
+                      type="text"
+                      name="securityAnswer"
+                      required
+                      placeholder="Your secret answer"
+                      className="form-input"
+                      value={formData.securityAnswer}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {tab === 'forgot' && (
-            <div className="form-group">
-              <label className="form-label">New Password</label>
-              <div style={{ position: 'relative' }}>
-                <KeyRound size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+          {tab === 'forgot' && fetchedSecurityQuestion && (
+            <>
+              <div className="form-group" style={{ padding: '16px', background: 'rgba(16,185,129,0.05)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                <label className="form-label" style={{ color: 'var(--accent-emerald)' }}>Security Question</label>
+                <p style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 12 }}>{fetchedSecurityQuestion}</p>
                 <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  name="newPassword"
+                  type="text"
+                  name="securityAnswer"
                   required
-                  placeholder="Enter new password"
+                  placeholder="Enter your answer"
                   className="form-input"
-                  style={{ paddingLeft: 40, paddingRight: 40 }}
-                  value={formData.newPassword}
+                  value={formData.securityAnswer}
                   onChange={handleChange}
                 />
-                <button 
-                  type="button" 
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                >
-                  {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
               </div>
-            </div>
+
+              <div className="form-group">
+                <label className="form-label">New Password</label>
+                <div style={{ position: 'relative' }}>
+                  <KeyRound size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    name="newPassword"
+                    required
+                    placeholder="Enter new password"
+                    className="form-input"
+                    style={{ paddingLeft: 40, paddingRight: 40 }}
+                    value={formData.newPassword}
+                    onChange={handleChange}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </>
           )}
 
           <button
@@ -179,7 +299,7 @@ export default function AuthModal() {
             className="btn btn-primary"
             style={{ width: '100%', marginTop: 10, padding: 12 }}
           >
-            {loading ? 'Processing...' : tab === 'login' ? 'Sign In' : tab === 'register' ? 'Create Account' : 'Reset Password'}
+            {loading ? 'Processing...' : tab === 'login' ? 'Sign In' : tab === 'register' ? 'Create Account' : tab === 'forgot' && !fetchedSecurityQuestion ? 'Next' : 'Reset Password'}
           </button>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, fontSize: '0.85rem' }}>

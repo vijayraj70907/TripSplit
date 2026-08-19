@@ -80,10 +80,10 @@ class Statement {
 
     // --- INSERT INTO users ---
     if (sql.startsWith('INSERT INTO users')) {
-      const [name, email, password_hash, avatar_url] = params;
+      const [name, email, password_hash, avatar_url, security_question, security_answer] = params;
       store.counters.users++;
       const id = store.counters.users;
-      store.users.push({ id, name, email, password_hash, avatar_url, created_at: new Date().toISOString() });
+      store.users.push({ id, name, email, password_hash, avatar_url, security_question: security_question || null, security_answer: security_answer || null, created_at: new Date().toISOString() });
       saveStore();
       return { lastInsertRowid: id, changes: 1 };
     }
